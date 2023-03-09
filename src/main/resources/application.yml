@@ -1,0 +1,7 @@
+spring:
+  cache:
+    cache-names: cacheName, someOtherCacheName
+    caffeine:
+      spec: initialCapacity=50,maximumSize=10,expireAfterAccess=300s
+  profiles:
+    active: dev

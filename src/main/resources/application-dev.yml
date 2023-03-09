@@ -1,0 +1,28 @@
+server:
+  port: 8090
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/transactiondb
+    username: postgres
+    password: 2002
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: create
+    show-sql: true
+    properties:
+      hibernate:
+        enable_lazy_load_no_trans: true
+cache:
+  update:
+    in: 15
+  expire:
+    delay:
+      in: 30
+app:
+  clients:
+    - uzcard
+    - humo
+  scheduling:
+    enabled: true
