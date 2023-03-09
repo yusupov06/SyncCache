@@ -10,6 +10,11 @@ import java.util.List;
 public class HumoGetTransactionsStrategy implements GetTransactionsStrategy {
 
     @Override
+    public String getCardPrefix() {
+        return "9860";
+    }
+
+    @Override
     public List<Transaction> getTransactionsBetweenDays(String card, LocalDateTime dateFrom, LocalDateTime dateTo) {
         return null;
     }

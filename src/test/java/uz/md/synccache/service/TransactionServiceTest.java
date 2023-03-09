@@ -583,6 +583,120 @@ public class TransactionServiceTest {
     /**
      * Should get from cache and client
      * [1-10] in uzcard client
+     * [5-8] is cached
+     * And we call [2-7] range [5-7] from cache and [2-4] from uzcard
+     */
+    @Test
+    void shouldGetSomeFromCacheAndSomeFromUzCardClientButClientResponseIsEmpty() {
+
+        // check cache is empty
+        Assertions.assertTrue(myCache.isEmpty());
+
+        // Imagine now 15
+        // FromDate = 11
+        LocalDateTime fromDate = LocalDateTime.now().minusDays(4);
+        // ToDate = 15
+        LocalDateTime toDate = LocalDateTime.now();
+
+        // Real results
+
+        List<String> uzCards = MockGenerator.getUzCards();
+
+        GetByDateRequest request = new GetByDateRequest(uzCards.get(0), fromDate, toDate);
+
+        setThisRequestAndCheckIt(request);
+
+        // ################### Second request #################
+
+        // FromDate = 9
+        // ToDate = 13
+        GetByDateRequest request2 = new GetByDateRequest(request.getCardNumber(),
+                LocalDateTime.now().minusDays(6),
+                LocalDateTime.now().minusDays(2));
+
+        Predicate<Transaction> cardPredicate = AppUtils
+                .cardPredicate(request2.getCardNumber());
+
+        // in Second call with dates
+        Predicate<Transaction> datePredicate2 = AppUtils
+                .datePredicate(request2.getDateFrom().toLocalDate(),
+                        request.getDateFrom().toLocalDate());
+
+
+
+        when(uzCardClient.getTransactionsBetweenDates(request2.getCardNumber(),
+                request2.getDateFrom().toLocalDate(),
+                request.getDateFrom().toLocalDate()))
+                .thenReturn(new ArrayList<>());
+
+        // Second call
+        ResponseEntity<List<TransactionDTO>> responseEntity = transactionService
+                .getByDateBetween(request2);
+
+        // Check for call client
+        Mockito.verify(uzCardClient, Mockito.times(1))
+                .getTransactionsBetweenDates(request.getCardNumber(), request.getDateFrom().toLocalDate(), request.getDateTo().toLocalDate());
+
+        // Check for not to call client
+        Mockito.verify(uzCardClient, Mockito.times(0))
+                .getTransactionsBetweenDates(request2.getCardNumber(), request2.getDateFrom().toLocalDate(), request2.getDateTo().toLocalDate());
+
+        // Check for call to client
+        Mockito.verify(uzCardClient, Mockito.times(1))
+                .getTransactionsBetweenDates(request2.getCardNumber(), request2.getDateFrom().toLocalDate(), request.getDateFrom().toLocalDate());
+
+        RangeDTO cacheRange = myCache.getCacheRange(request2.getCardNumber());
+        Assertions.assertNotNull(cacheRange);
+        Assertions.assertEquals(cacheRange.getFromDate(), request.getDateFrom());
+        Assertions.assertEquals(cacheRange.getToDate(), request.getDateTo());
+
+
+        // Check for updated cache
+        List<Transaction> fromCache2 = myCache
+                .getAllBetween(request.getCardNumber(), request2.getDateFrom(), request.getDateTo());
+
+
+        // Check for correctly cached transactions
+
+        Predicate<Transaction> dateTimePredicate = AppUtils
+                .dateTimePredicate(request.getDateFrom(),
+                        request.getDateTo());
+
+        List<Transaction> cacheResultShouldBe = MockGenerator.getUzCardTransactions().stream()
+                .filter(cardPredicate.and(dateTimePredicate))
+                .sorted(Comparator.comparing(Transaction::getAddedDate))
+                .toList();
+
+        // check for equality
+        transactionsEquals(cacheResultShouldBe, fromCache2);
+
+        // Check for correctly cached transactions
+        Predicate<Transaction> dateTimePredicate2 = AppUtils
+                .dateTimePredicate(request2.getDateFrom(),
+                        request2.getDateTo());
+
+        // after call result should be like this
+        List<Transaction> resultShouldBe = cacheResultShouldBe.stream()
+                .filter(dateTimePredicate2)
+                .sorted(Comparator.comparing(Transaction::getAddedDate))
+                .toList();
+
+        // check for response
+        Assertions.assertEquals(responseEntity.getStatusCode().value(), HttpStatus.OK.value());
+
+        // response body
+        List<TransactionDTO> body = responseEntity.getBody();
+
+        Assertions.assertNotNull(body);
+
+        // response body and client service data equality
+        transactionsAndDTOsEquals(resultShouldBe, body);
+
+    }
+
+    /**
+     * Should get from cache and client
+     * [1-10] in uzcard client
      * [1-4] is cached
      * And we call [2-8] range [2-4] from cache and [5-8] from uzcard
      */

@@ -21,6 +21,11 @@ public class UzCardGetTransactionStrategy implements GetTransactionsStrategy {
     private final UzCardClient uzCardClient;
 
     @Override
+    public String getCardPrefix() {
+        return "8600";
+    }
+
+    @Override
     public List<Transaction> getTransactionsBetweenDays(String card, LocalDateTime dateFrom, LocalDateTime dateTo) {
 
         if (card == null || dateFrom == null || dateTo == null)

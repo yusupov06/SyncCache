@@ -1,24 +1,30 @@
 package uz.md.synccache.strategy;
 
+import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.support.ClassPathXmlApplicationContext;
+import org.springframework.context.support.FileSystemXmlApplicationContext;
 import org.springframework.stereotype.Component;
 import uz.md.synccache.entity.Transaction;
 import uz.md.synccache.exceptions.BadRequestException;
 import uz.md.synccache.exceptions.NotFoundException;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
-@Component
+@Configuration
+@RequiredArgsConstructor
+//@ComponentScan(basePackages = {"uz.md.synccache.strategy"})
+@ComponentScan(basePackageClasses = {GetTransactionsStrategy.class})
 public class GetTransactionsStrategyContext {
 
-    private final UzCardGetTransactionStrategy uzCardGetTransactionStrategy;
-    private final HumoGetTransactionsStrategy humoGetTransactionsStrategy;
+    private final ApplicationContext context;
 
-    public GetTransactionsStrategyContext(UzCardGetTransactionStrategy uzCardGetTransactionStrategy,
-                                          HumoGetTransactionsStrategy humoGetTransactionsStrategy) {
-        this.uzCardGetTransactionStrategy = uzCardGetTransactionStrategy;
-        this.humoGetTransactionsStrategy = humoGetTransactionsStrategy;
-    }
+    private Map<String, GetTransactionsStrategy> beans = new HashMap<>();
 
     public List<Transaction> getTransactionsBetweenDays(String cardNumber, LocalDateTime dateFrom,
                                                         LocalDateTime dateTo) {
@@ -26,17 +32,34 @@ public class GetTransactionsStrategyContext {
         if (cardNumber == null || dateFrom == null || dateTo == null)
             throw new BadRequestException("Bad request");
 
+        String cardPrefix = cardNumber.substring(0, 4);
+
         GetTransactionsStrategy strategy;
 
-        strategy = switch (cardNumber.substring(0,4)) {
-            case "8600" -> uzCardGetTransactionStrategy;
-            case "9860" -> humoGetTransactionsStrategy;
-            default -> null;
-        };
+        if (!beans.containsKey(cardPrefix)) {
 
-        if (strategy == null)
-            throw new NotFoundException("Strategy not found");
+//            ApplicationContext context = new ClassPathXmlApplicationContext("uz.md.synccache.strategy");
 
+            // Get all the bean definition names in the context
+            String[] beanNames = context.getBeanDefinitionNames();
+
+            // Print the names of all the beans in the context
+            for (String beanName : beanNames) {
+
+                System.out.println(" ################# beanName = " + beanName);
+
+                Object bean = context.getBean(beanName);
+                if (bean instanceof GetTransactionsStrategy) {
+                    strategy = (GetTransactionsStrategy) bean;
+                    if (!beans.containsValue(strategy))
+                        beans.put(strategy.getCardPrefix(), strategy);
+                }
+            }
+
+            if (!beans.containsKey(cardPrefix))
+                throw new NotFoundException("Not found strategy");
+        }
+        strategy = beans.get(cardPrefix);
         return strategy
                 .getTransactionsBetweenDays(cardNumber, dateFrom, dateTo);
 
