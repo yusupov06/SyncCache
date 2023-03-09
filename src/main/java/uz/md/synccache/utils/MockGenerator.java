@@ -18,11 +18,16 @@ public class MockGenerator {
     private static final ObjectMapper objectMapper = new ObjectMapper();
 
     private static Set<String> uzCards = new HashSet<>();
+    private static Set<String> visaCards = new HashSet<>();
     private static Set<String> humoCards = new HashSet<>();
 
     @Setter
     private static List<Transaction> uzCardTransactions = new ArrayList<>();
 
+    @Setter
+    private static List<Transaction> visaTransactions = new ArrayList<>();
+
+    @Setter
     private static List<Transaction> humoTransactions = new ArrayList<>();
 
     // UzCard Mock
@@ -72,10 +77,59 @@ public class MockGenerator {
         return new ArrayList<>(uzCards);
     }
 
+    // Humo Mock
 
     public static List<Transaction> getHumoTransactions() {
         return humoTransactions;
     }
+
+    // Visa Mock
+
+    public static void setVisaCards(int count) {
+        while (visaCards.size() < count) {
+            String card = "5555" + RandomStringUtils.random(12, false, true);
+            visaCards.add(card);
+        }
+    }
+
+    public static List<Transaction> generateMockVisaCardTransactions(int count) {
+
+        List<Transaction> transactions = new ArrayList<>();
+
+        Random random = new Random();
+
+        for (int i = 0; i < count; i++) {
+            double amount = Math.round(random.nextDouble() * 500) + 100.0;
+            String[] cards = getTwoDifferentCards(getVisaCards());
+            transactions.add(Transaction.builder()
+                    .fromCard(cards[0])
+                    .toCard(cards[1])
+                    .amount(BigDecimal.valueOf(amount))
+                    .status(TransactionStatus.SUCCESS)
+                    .addedDate(getRandomLocalDateTimeBetween(LocalDateTime.now().minusDays(10), LocalDateTime.now()))
+                    .build());
+        }
+        return transactions;
+    }
+
+    public static List<Transaction> getVisaCardTransactions() {
+        return visaTransactions.stream()
+                .map(transaction -> Transaction.builder()
+                        .addedDate(transaction.getAddedDate())
+                        .status(transaction.getStatus())
+                        .addedDate(transaction.getAddedDate())
+                        .fromCard(transaction.getFromCard())
+                        .toCard(transaction.getToCard())
+                        .amount(transaction.getAmount())
+                        .build())
+                .toList();
+    }
+
+    public static List<String> getVisaCards() {
+        return new ArrayList<>(visaCards);
+    }
+
+
 
     private static String[] getTwoDifferentCards(List<String> cards) {
         int from = RandomUtils.nextInt(0, 8);

@@ -23,5 +23,8 @@ public class DataLoader implements CommandLineRunner {
         MockGenerator.setUzCards(8);
         MockGenerator.setUzCardTransactions(MockGenerator
                 .generateMockUzCardTransactions(200));
+        MockGenerator.setVisaCards(8);
+        MockGenerator.setVisaTransactions(MockGenerator
+                .generateMockVisaCardTransactions(200));
     }
 }

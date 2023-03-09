@@ -20,9 +20,6 @@ cache:
   expire:
     delay:
       in: 30
-app:
-  clients:
-    - uzcard
-    - humo
+
   scheduling:
     enabled: true

@@ -13,6 +13,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 import uz.md.synccache.cache.MyCache;
 import uz.md.synccache.clientService.UzCardClient;
+import uz.md.synccache.clientService.VisaCardClient;
 import uz.md.synccache.dtos.GetByDateRequest;
 import uz.md.synccache.dtos.RangeDTO;
 import uz.md.synccache.dtos.TransactionDTO;
@@ -44,6 +45,9 @@ public class TransactionServiceTest {
 
     @MockBean
     private UzCardClient uzCardClient;
+
+    @MockBean
+    private VisaCardClient visaCardClient;
 
     @Autowired
     private MyCache myCache;
@@ -91,6 +95,8 @@ public class TransactionServiceTest {
         Assertions.assertTrue(myCache.isEmpty());
     }
 
+    // #################### Uzcard ###########################
+
     /**
      * Should get from uzcard client
      */
@@ -109,7 +115,7 @@ public class TransactionServiceTest {
 
         GetByDateRequest request = new GetByDateRequest(uzCards.get(0), fromDate, toDate);
 
-        setThisRequestAndCheckIt(request);
+        setThisRequestAndCheckItInUzcard(request);
 
     }
 
@@ -133,7 +139,7 @@ public class TransactionServiceTest {
 
         GetByDateRequest request = new GetByDateRequest(uzCards.get(0), fromDate, toDate);
 
-        setThisRequestAndCheckIt(request);
+        setThisRequestAndCheckItInUzcard(request);
 
         ResponseEntity<List<TransactionDTO>> responseEntity = transactionService
                 .getByDateBetween(request);
@@ -188,7 +194,7 @@ public class TransactionServiceTest {
 
         GetByDateRequest request = new GetByDateRequest(uzCards.get(0), fromDate, toDate);
 
-        setThisRequestAndCheckIt(request);
+        setThisRequestAndCheckItInUzcard(request);
 
         // Second request
         GetByDateRequest request2 = new GetByDateRequest(request.getCardNumber(), LocalDateTime.now().minusDays(5),
@@ -261,7 +267,7 @@ public class TransactionServiceTest {
 
         GetByDateRequest request = new GetByDateRequest(uzCards.get(0), fromDate, toDate);
 
-        setThisRequestAndCheckIt(request);
+        setThisRequestAndCheckItInUzcard(request);
 
         // ################### Second request #################
 
@@ -365,7 +371,7 @@ public class TransactionServiceTest {
 
         GetByDateRequest request = new GetByDateRequest(uzCards.get(0), fromDate, toDate);
 
-        setThisRequestAndCheckIt(request);
+        setThisRequestAndCheckItInUzcard(request);
 
         // ################### Second request #################
 
@@ -484,7 +490,7 @@ public class TransactionServiceTest {
 
         GetByDateRequest request = new GetByDateRequest(uzCards.get(0), fromDate, toDate);
 
-        setThisRequestAndCheckIt(request);
+        setThisRequestAndCheckItInUzcard(request);
 
         // ################### Second request #################
 
@@ -604,7 +610,7 @@ public class TransactionServiceTest {
 
         GetByDateRequest request = new GetByDateRequest(uzCards.get(0), fromDate, toDate);
 
-        setThisRequestAndCheckIt(request);
+        setThisRequestAndCheckItInUzcard(request);
 
         // ################### Second request #################
 
@@ -718,7 +724,7 @@ public class TransactionServiceTest {
 
         GetByDateRequest request = new GetByDateRequest(uzCards.get(0), fromDate, toDate);
 
-        setThisRequestAndCheckIt(request);
+        setThisRequestAndCheckItInUzcard(request);
 
         // ################### Second request #################
 
@@ -842,7 +848,7 @@ public class TransactionServiceTest {
 
         GetByDateRequest request = new GetByDateRequest(uzCards.get(0), fromDate, toDate);
 
-        setThisRequestAndCheckIt(request);
+        setThisRequestAndCheckItInUzcard(request);
 
         // ################### Second request #################
 
@@ -950,7 +956,7 @@ public class TransactionServiceTest {
 
         GetByDateRequest request = new GetByDateRequest(uzCards.get(0), fromDate, toDate);
 
-        setThisRequestAndCheckIt(request);
+        setThisRequestAndCheckItInUzcard(request);
 
         // ################### Second request #################
 
@@ -1075,7 +1081,7 @@ public class TransactionServiceTest {
 
         GetByDateRequest request = new GetByDateRequest(uzCards.get(0), fromDate, toDate);
 
-        setThisRequestAndCheckIt(request);
+        setThisRequestAndCheckItInUzcard(request);
 
         // Second Call
         // Change card
@@ -1086,7 +1092,7 @@ public class TransactionServiceTest {
         RangeDTO cacheRange2 = myCache.getCacheRange(request.getCardNumber());
         Assertions.assertNull(cacheRange2);
 
-        setThisRequestAndCheckIt(request);
+        setThisRequestAndCheckItInUzcard(request);
 
     }
 
@@ -1107,7 +1113,7 @@ public class TransactionServiceTest {
         List<String> uzCards = MockGenerator.getUzCards();
         GetByDateRequest request = new GetByDateRequest(uzCards.get(0), fromDate, toDate);
 
-        setThisRequestAndCheckIt(request);
+        setThisRequestAndCheckItInUzcard(request);
 
     }
 
@@ -1128,7 +1134,7 @@ public class TransactionServiceTest {
 
         GetByDateRequest request = new GetByDateRequest(uzCards.get(0), fromDate, toDate);
 
-        setThisRequestAndCheckIt(request);
+        setThisRequestAndCheckItInUzcard(request);
 
         List<Transaction> fromCache1 = myCache.getAllBetween(request.getCardNumber(), request.getDateFrom(), request.getDateTo())
                 .stream()
@@ -1175,20 +1181,6 @@ public class TransactionServiceTest {
 
     }
 
-
-
-    private void transactionAfterUpdateNotEquals(List<Transaction> actual, List<Transaction> expected) {
-        Assertions.assertEquals(actual.size(), expected.size());
-        for (int i = 0; i < actual.size(); i++) {
-            Assertions.assertEquals(expected.get(i).getId(), actual.get(i).getId());
-            Assertions.assertNotEquals(expected.get(i).getAmount(), actual.get(i).getAmount());
-            Assertions.assertNotEquals(expected.get(i).getStatus(), actual.get(i).getStatus());
-            Assertions.assertEquals(expected.get(i).getFromCard(), actual.get(i).getFromCard());
-            Assertions.assertEquals(expected.get(i).getToCard(), actual.get(i).getToCard());
-            Assertions.assertEquals(expected.get(i).getAddedDate(), actual.get(i).getAddedDate());
-        }
-    }
-
     /**
      * Common method that call to client with this request and check it
      * 1 - cached correctly
@@ -1197,7 +1189,7 @@ public class TransactionServiceTest {
      *
      * @param request - CardNumber, From and To date
      */
-    private void setThisRequestAndCheckIt(GetByDateRequest request) {
+    private void setThisRequestAndCheckItInUzcard(GetByDateRequest request) {
 
         Predicate<Transaction> cardPredicate = AppUtils
                 .cardPredicate(request.getCardNumber());
@@ -1257,6 +1249,20 @@ public class TransactionServiceTest {
 
         transactionsAndDTOsEquals(mockUzCardTransactionsAfterCall, body);
 
+    }
+
+
+
+    private void transactionAfterUpdateNotEquals(List<Transaction> actual, List<Transaction> expected) {
+        Assertions.assertEquals(actual.size(), expected.size());
+        for (int i = 0; i < actual.size(); i++) {
+            Assertions.assertEquals(expected.get(i).getId(), actual.get(i).getId());
+            Assertions.assertNotEquals(expected.get(i).getAmount(), actual.get(i).getAmount());
+            Assertions.assertNotEquals(expected.get(i).getStatus(), actual.get(i).getStatus());
+            Assertions.assertEquals(expected.get(i).getFromCard(), actual.get(i).getFromCard());
+            Assertions.assertEquals(expected.get(i).getToCard(), actual.get(i).getToCard());
+            Assertions.assertEquals(expected.get(i).getAddedDate(), actual.get(i).getAddedDate());
+        }
     }
 
     private void transactionsEquals(List<Transaction> actual, List<Transaction> expected) {
