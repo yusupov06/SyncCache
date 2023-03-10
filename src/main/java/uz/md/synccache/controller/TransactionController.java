@@ -9,6 +9,7 @@ import uz.md.synccache.dtos.TransactionDTO;
 import uz.md.synccache.service.TransactionService;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("api/v1")
@@ -18,7 +19,7 @@ public class TransactionController {
     private final TransactionService transactionService;
 
     @PostMapping("/transaction/date-between")
-    public ResponseEntity<List<TransactionDTO>> getByDate(@RequestBody @Valid GetByDateRequest request) {
+    public ResponseEntity<Map<String, List<TransactionDTO>>> getByDate(@RequestBody @Valid GetByDateRequest request) {
         return transactionService.getByDateBetween(request);
     }
 

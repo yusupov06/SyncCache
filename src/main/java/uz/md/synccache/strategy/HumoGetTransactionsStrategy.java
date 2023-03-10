@@ -5,6 +5,7 @@ import uz.md.synccache.entity.Transaction;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 @Service
 public class HumoGetTransactionsStrategy implements GetTransactionsStrategy {
@@ -15,7 +16,7 @@ public class HumoGetTransactionsStrategy implements GetTransactionsStrategy {
     }
 
     @Override
-    public List<Transaction> getTransactionsBetweenDays(String card, LocalDateTime dateFrom, LocalDateTime dateTo) {
+    public Map<String, List<Transaction>> getTransactionsBetweenDays(List<String> cards, LocalDateTime dateFrom, LocalDateTime dateTo) {
         return null;
     }
 }

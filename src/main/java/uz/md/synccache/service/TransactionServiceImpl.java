@@ -13,14 +13,11 @@ import uz.md.synccache.dtos.TransactionDTO;
 import uz.md.synccache.entity.Transaction;
 import uz.md.synccache.exceptions.BadRequestException;
 import uz.md.synccache.mapper.TransactionMapper;
-import uz.md.synccache.strategy.GetTransactionsStrategyContext;
+import uz.md.synccache.strategy.GetTransactionsComposite;
 import uz.md.synccache.utils.AppUtils;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 @Service
 @RequiredArgsConstructor
@@ -30,17 +27,18 @@ public class TransactionServiceImpl implements TransactionService {
 
     private final TransactionMapper transactionMapper;
     private final MyCache myCache;
-    private final GetTransactionsStrategyContext getTransactionsStrategyContext;
+    private final GetTransactionsComposite transactionsComposite;
 
     @Override
-    public ResponseEntity<List<TransactionDTO>> getByDateBetween(GetByDateRequest request) {
+    public ResponseEntity<Map<String, List<TransactionDTO>>> getByDateBetween(GetByDateRequest request) {
 
         log.info("Getting by date between ");
 
         // Request validation
         if (request == null
                 || request.getDateTo() == null
-                || request.getDateFrom() == null) {
+                || request.getDateFrom() == null
+                || request.getCardNumbers() == null) {
             throw new BadRequestException("Request cannot be null");
         }
 
@@ -52,39 +50,53 @@ public class TransactionServiceImpl implements TransactionService {
             request.setDateTo(dateFrom);
         }
 
-        // Get cached range of card
-        RangeDTO cachedRange = myCache.getCacheRange(request.getCardNumber());
+        Map<String, List<TransactionDTO>> response = new HashMap<>();
 
-        // If no range with this card this is the first call
-        if (cachedRange == null
-                || cachedRange.getFromDate() == null
-                || cachedRange.getToDate() == null) {
+        List<String> cardsThatNotCached = new ArrayList<>();
 
-            List<Transaction> fromClient = getTransactionsStrategyContext
-                    .getTransactionsBetweenDays(request.getCardNumber(), request.getDateFrom(), request.getDateTo());
-
-            if (fromClient == null)
-                fromClient = new ArrayList<>();
-            myCache.setCachedRange(request.getCardNumber(),
-                    request.getDateFrom(), request.getDateTo());
-            myCache.putAll(fromClient);
-
-            return new ResponseEntity<>(transactionMapper
-                    .toDTO(fromClient), HttpStatus.OK);
+        for (String cardNumber : request.getCardNumbers()) {
+            if (myCache.existsCacheRangeByCardNumber(cardNumber)) {
+                List<Transaction> fromCache = getFromCache(cardNumber, request.getDateFrom(), request.getDateTo());
+                if (fromCache != null)
+                    response.put(cardNumber, transactionMapper.toDTO(fromCache));
+            } else
+                cardsThatNotCached.add(cardNumber);
         }
+
+        Map<String, List<Transaction>> transactionsMap = transactionsComposite
+                .getTransactionsBetweenDays(cardsThatNotCached, request.getDateFrom(), request.getDateTo());
+
+        transactionsMap.forEach((cardNum, transactions) -> {
+            if (transactions != null) {
+                if (transactions.size() != 0) {
+                    myCache.setCachedRange(cardNum, request.getDateFrom(), request.getDateTo());
+                    myCache.putAll(transactions);
+                }
+                response.put(cardNum, transactionMapper.toDTO(transactions));
+            }
+        });
+
+        return new ResponseEntity<>(response, HttpStatus.OK);
+    }
+
+    private List<Transaction> getFromCache(String cardNumber, LocalDateTime fromDate, LocalDateTime toDate) {
+
+        log.info("Getting from cache and client ");
+
+        RangeDTO cachedRange = myCache.getCacheRange(cardNumber);
 
         // If range is not null, and transactions existed in our cache with this request
         List<Transaction> fromCache = new ArrayList<>(myCache
-                .getAllBetween(request.getCardNumber(), request.getDateFrom(), request.getDateTo()));
+                .getAllBetween(cardNumber, fromDate, toDate));
 
         // if transactions with this request is empty
         // We have to get from client
         if (fromCache.isEmpty()) {
 
-            log.info("Getting from client with request " + request);
+            log.info("Getting from client with request " + cardNumber + " " + fromDate + "" + toDate);
 
-            LocalDateTime from = request.getDateFrom();
-            LocalDateTime to = request.getDateTo();
+            LocalDateTime from = fromDate;
+            LocalDateTime to = toDate;
 
             // we have to set fromDate
             // if we after cached transactions we have to know fromDate
@@ -101,20 +113,23 @@ public class TransactionServiceImpl implements TransactionService {
             }
 
             // Get transactions from client
-            List<Transaction> allByDateBetween = getTransactionsStrategyContext
-                    .getTransactionsBetweenDays(request.getCardNumber(), from, to);
+            Map<String, List<Transaction>> transactionsMap = transactionsComposite
+                    .getTransactionsBetweenDays(List.of(cardNumber), from, to);
 
-            if (allByDateBetween == null)
-                allByDateBetween = new ArrayList<>();
+            if (transactionsMap == null || transactionsMap.containsKey(cardNumber))
+                return new ArrayList<>();
 
-            // save transactions to cache
-            myCache.putAll(allByDateBetween);
-            // set new range to this card
-            myCache.setCachedRange(request.getCardNumber(), from, to);
+            List<Transaction> transactions = transactionsMap.get(cardNumber);
 
-            return new ResponseEntity<>(transactionMapper
-                    .toDTO(allByDateBetween), HttpStatus.OK);
+            if (transactions != null) {
+                // save transactions to cache
+                myCache.putAll(transactions);
+                // set new range to this card
+                myCache.setCachedRange(cardNumber, from, to);
 
+                return transactions;
+            }
+            return new ArrayList<>();
         }
 
         // If fromCache is not empty we get not existed transactions from client,
@@ -128,73 +143,72 @@ public class TransactionServiceImpl implements TransactionService {
         LocalDateTime rangeFrom = cachedFrom;
         LocalDateTime rangeTo = cachedTo;
 
-        if (request.getDateFrom().isBefore(cachedFrom)
-                && request.getDateTo().isAfter(cachedTo)) {
+        if (fromDate.isBefore(cachedFrom)
+                && toDate.isAfter(cachedTo)) {
 
             // If our request is getting [1-10] range but our cache range is [4-7]
             // we get from client with two calls [1-3] and [8-10]
 
-            List<Transaction> fromClient1 = getTransactionsStrategyContext
-                    .getTransactionsBetweenDays(request.getCardNumber(), request.getDateFrom(), cachedFrom.minusNanos(1));
-
-            if (fromClient1 != null && fromClient1.size() != 0) {
-                rangeFrom = request.getDateFrom();
-                transactions.addAll(fromClient1);
+            Map<String, List<Transaction>> fromClient1 = transactionsComposite
+                    .getTransactionsBetweenDays(List.of(cardNumber), fromDate, cachedFrom.minusNanos(1));
+            if (fromClient1 != null
+                    && fromClient1.size() != 0
+                    && fromClient1.containsKey(cardNumber)) {
+                rangeFrom = fromDate;
+                transactions.addAll(fromClient1.get(cardNumber));
             }
 
-            transactions.addAll(fromCache);
+            Map<String, List<Transaction>> fromClient2 = transactionsComposite
+                    .getTransactionsBetweenDays(List.of(cardNumber), cachedTo.plusNanos(1), toDate);
 
-            List<Transaction> fromClient2 = getTransactionsStrategyContext
-                    .getTransactionsBetweenDays(request.getCardNumber(), cachedTo.plusNanos(1), request.getDateTo());
-            if (fromClient2 != null && fromClient2.size() != 0) {
-                rangeTo = request.getDateTo();
-                transactions.addAll(fromClient2);
+            if (fromClient2 != null
+                    && fromClient2.size() != 0
+                    && fromClient2.containsKey(cardNumber)) {
+                rangeTo = toDate;
+                transactions.addAll(fromClient2.get(cardNumber));
             }
-        } else if (request.getDateFrom().isBefore(cachedFrom)) {
+
+        } else if (fromDate.isBefore(cachedFrom)) {
 
             // If our request is getting [1-5] range but our cache range is [4-5] or [4-6]
             // we get from client with a call [1-3]
 
-            transactions.addAll(fromCache);
-            List<Transaction> fromClient = getTransactionsStrategyContext
-                    .getTransactionsBetweenDays(request.getCardNumber(), request.getDateFrom(), cachedFrom.minusNanos(1));
-            if (fromClient != null && fromClient.size() != 0) {
-                rangeFrom = request.getDateFrom();
-                transactions.addAll(fromClient);
+            Map<String, List<Transaction>> fromClient = transactionsComposite
+                    .getTransactionsBetweenDays(List.of(cardNumber), fromDate, cachedFrom.minusNanos(1));
+            if (fromClient != null
+                    && fromClient.size() != 0
+                    && fromClient.containsKey(cardNumber)) {
+                rangeFrom = fromDate;
+                transactions.addAll(fromClient.get(cardNumber));
             }
 
-        } else if (request.getDateTo().isAfter(cachedTo)) {
+        } else if (toDate.isAfter(cachedTo)) {
 
             // If our request is getting [2-8] range but our cache range is [1-5] or [2-5]
             // we get from client with a call [6-8]
 
-            transactions.addAll(fromCache);
-            List<Transaction> fromClient = getTransactionsStrategyContext
-                    .getTransactionsBetweenDays(request.getCardNumber(), cachedTo.plusNanos(1), request.getDateTo());
-            if (fromClient != null && fromClient.size() != 0) {
-                rangeTo = request.getDateTo();
-                transactions.addAll(fromClient);
+            Map<String, List<Transaction>> fromClient = transactionsComposite
+                    .getTransactionsBetweenDays(List.of(cardNumber), cachedTo.plusNanos(1), toDate);
+            if (fromClient != null
+                    && fromClient.size() != 0
+                    && fromClient.containsKey(cardNumber)) {
+                rangeTo = toDate;
+                transactions.addAll(fromClient.get(cardNumber));
             }
-        } else {
-
-            // If our request is getting [2-4] range and our cache range is [2-4]
-            // we return this
-            transactions.addAll(fromCache);
         }
+
+        transactions.addAll(fromCache);
 
         transactions.sort(Comparator.comparing(Transaction::getAddedDate));
 
-        myCache.setCachedRange(request.getCardNumber(), rangeFrom, rangeTo);
+        myCache.setCachedRange(cardNumber, rangeFrom, rangeTo);
         myCache.putAll(transactions);
 
-        List<Transaction> res = transactions.stream()
-                .filter(AppUtils.dateTimePredicate(request.getDateFrom(), request.getDateTo()))
+        return transactions.stream()
+                .filter(AppUtils.dateTimePredicate(fromDate, toDate))
                 .toList();
-
-        return new ResponseEntity<>(transactionMapper
-                .toDTO(res), HttpStatus.OK);
-
     }
+
 
     @Override
     public void checkForCachedDataAndUpdate() {
@@ -214,10 +228,10 @@ public class TransactionServiceImpl implements TransactionService {
         for (String card : cards) {
             RangeDTO cacheRange = myCache.getCacheRange(card);
             if (cacheRange != null && cacheRange.getFromDate() != null && cacheRange.getToDate() != null) {
-                List<Transaction> list = getTransactionsStrategyContext
-                        .getTransactionsBetweenDays(card, cacheRange.getFromDate(), cacheRange.getToDate());
-                if (list != null && !list.isEmpty())
-                    myCache.putAll(list);
+                Map<String, List<Transaction>> listMap = transactionsComposite
+                        .getTransactionsBetweenDays(List.of(card), cacheRange.getFromDate(), cacheRange.getToDate());
+                if (listMap != null && !listMap.isEmpty())
+                    myCache.putAll(listMap.get(card));
             }
         }
 

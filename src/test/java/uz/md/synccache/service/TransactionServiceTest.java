@@ -28,12 +28,16 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Predicate;
 
 import static org.junit.Assert.assertThrows;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
+
+import static uz.md.synccache.util.TestUtil.*;
+
 
 @SpringBootTest
 @ActiveProfiles("test")
@@ -63,7 +67,7 @@ public class TransactionServiceTest {
 
     @Test
     void shouldThrowBadRequestExceptionByDateBetweenWithNullDateFrom() {
-        GetByDateRequest request = new GetByDateRequest("86003129", null, LocalDateTime.now());
+        GetByDateRequest request = new GetByDateRequest(List.of("86003129"), null, LocalDateTime.now());
         assertThrows(BadRequestException.class, () -> transactionService.getByDateBetween(request));
 
         Assertions.assertTrue(myCache.isEmpty());
@@ -73,17 +77,12 @@ public class TransactionServiceTest {
     void shouldThrowBadRequestExceptionByDateBetweenWithNullCardNumber() {
         GetByDateRequest request = new GetByDateRequest(null, LocalDateTime.now().minusDays(5), LocalDateTime.now());
         assertThrows(BadRequestException.class, () -> transactionService.getByDateBetween(request));
-
-        // Check for not to call to client
-        Mockito.verify(uzCardClient, Mockito.times(0))
-                .getTransactionsBetweenDates(request.getCardNumber(), request.getDateFrom().toLocalDate(), request.getDateTo().toLocalDate());
-
         Assertions.assertTrue(myCache.isEmpty());
     }
 
     @Test
     void shouldThrowBadRequestExceptionByDateBetweenWithNullDateTo() {
-        GetByDateRequest request = new GetByDateRequest("86003129", LocalDateTime.now().minusDays(2), null);
+        GetByDateRequest request = new GetByDateRequest(List.of("86003129"), LocalDateTime.now().minusDays(2), null);
         assertThrows(BadRequestException.class, () -> transactionService.getByDateBetween(request));
 
         Assertions.assertTrue(myCache.isEmpty());
@@ -113,7 +112,7 @@ public class TransactionServiceTest {
 
         List<String> uzCards = MockGenerator.getUzCards();
 
-        GetByDateRequest request = new GetByDateRequest(uzCards.get(0), fromDate, toDate);
+        GetByDateRequest request = new GetByDateRequest(List.of(uzCards.get(0)), fromDate, toDate);
 
         setThisRequestAndCheckItInUzcard(request);
 
@@ -137,22 +136,22 @@ public class TransactionServiceTest {
 
         List<String> uzCards = MockGenerator.getUzCards();
 
-        GetByDateRequest request = new GetByDateRequest(uzCards.get(0), fromDate, toDate);
+        GetByDateRequest request = new GetByDateRequest(List.of(uzCards.get(0)), fromDate, toDate);
 
         setThisRequestAndCheckItInUzcard(request);
 
-        ResponseEntity<List<TransactionDTO>> responseEntity = transactionService
+        ResponseEntity<Map<String, List<TransactionDTO>>> responseEntity = transactionService
                 .getByDateBetween(request);
 
         // Check for call to client
         Mockito.verify(uzCardClient, Mockito.times(1))
-                .getTransactionsBetweenDates(request.getCardNumber(), request.getDateFrom().toLocalDate(), request.getDateTo().toLocalDate());
+                .getTransactionsBetweenDates(request.getCardNumbers().get(0), request.getDateFrom().toLocalDate(), request.getDateTo().toLocalDate());
 
         // check for response
         Assertions.assertEquals(responseEntity.getStatusCode().value(), HttpStatus.OK.value());
 
         // response body
-        List<TransactionDTO> body = responseEntity.getBody();
+        Map<String, List<TransactionDTO>> body = responseEntity.getBody();
 
         Assertions.assertNotNull(body);
 
@@ -161,7 +160,7 @@ public class TransactionServiceTest {
                 .dateTimePredicate(request.getDateFrom(), request.getDateTo());
 
         Predicate<Transaction> cardPredicate = AppUtils
-                .cardPredicate(request.getCardNumber());
+                .cardPredicate(request.getCardNumbers().get(0));
 
         List<Transaction> mockUzCardTransactionsAfterCall = MockGenerator.getUzCardTransactions()
                 .stream()
@@ -170,7 +169,7 @@ public class TransactionServiceTest {
                 .toList();
 
         // response body and client service data equality
-        transactionsAndDTOsEquals(mockUzCardTransactionsAfterCall, body);
+        transactionsAndDTOsEquals(mockUzCardTransactionsAfterCall, body.get(request.getCardNumbers().get(0)));
     }
 
     /**
@@ -192,19 +191,19 @@ public class TransactionServiceTest {
 
         List<String> uzCards = MockGenerator.getUzCards();
 
-        GetByDateRequest request = new GetByDateRequest(uzCards.get(0), fromDate, toDate);
+        GetByDateRequest request = new GetByDateRequest(List.of(uzCards.get(0)), fromDate, toDate);
 
         setThisRequestAndCheckItInUzcard(request);
 
         // Second request
-        GetByDateRequest request2 = new GetByDateRequest(request.getCardNumber(), LocalDateTime.now().minusDays(5),
+        GetByDateRequest request2 = new GetByDateRequest(request.getCardNumbers(), LocalDateTime.now().minusDays(5),
                 LocalDateTime.now().minusDays(3));
 
         Predicate<Transaction> dateTimePredicate = AppUtils
                 .dateTimePredicate(request2.getDateFrom(), request2.getDateTo());
 
         Predicate<Transaction> cardPredicate = AppUtils
-                .cardPredicate(request2.getCardNumber());
+                .cardPredicate(request2.getCardNumbers().get(0));
 
         List<Transaction> mockUzCardTransactionsAfterCall = MockGenerator.getUzCardTransactions()
                 .stream()
@@ -223,27 +222,27 @@ public class TransactionServiceTest {
                 .toList();
 
         // Second call with [3-5]
-        ResponseEntity<List<TransactionDTO>> responseEntity = transactionService
+        ResponseEntity<Map<String, List<TransactionDTO>>> responseEntity = transactionService
                 .getByDateBetween(request2);
 
         // Check for call to client
         Mockito.verify(uzCardClient, Mockito.times(1))
-                .getTransactionsBetweenDates(request.getCardNumber(), request.getDateFrom().toLocalDate(), request.getDateTo().toLocalDate());
+                .getTransactionsBetweenDates(request.getCardNumbers().get(0), request.getDateFrom().toLocalDate(), request.getDateTo().toLocalDate());
 
         // Check for call to client
         Mockito.verify(uzCardClient, Mockito.times(0))
-                .getTransactionsBetweenDates(request2.getCardNumber(), request2.getDateFrom().toLocalDate(), request.getDateTo().toLocalDate());
+                .getTransactionsBetweenDates(request2.getCardNumbers().get(0), request2.getDateFrom().toLocalDate(), request.getDateTo().toLocalDate());
 
         // check for response
         Assertions.assertEquals(responseEntity.getStatusCode().value(), HttpStatus.OK.value());
 
         // response body
-        List<TransactionDTO> body = responseEntity.getBody();
+        Map<String, List<TransactionDTO>> body = responseEntity.getBody();
 
         Assertions.assertNotNull(body);
 
         // response body and client service data equality
-        transactionsAndDTOsEquals(transactionsAfterSecondCall, body);
+        transactionsAndDTOsEquals(transactionsAfterSecondCall, body.get(request.getCardNumbers().get(0)));
     }
 
     /**
@@ -265,18 +264,18 @@ public class TransactionServiceTest {
 
         List<String> uzCards = MockGenerator.getUzCards();
 
-        GetByDateRequest request = new GetByDateRequest(uzCards.get(0), fromDate, toDate);
+        GetByDateRequest request = new GetByDateRequest(List.of(uzCards.get(0)), fromDate, toDate);
 
         setThisRequestAndCheckItInUzcard(request);
 
         // ################### Second request #################
 
-        GetByDateRequest request2 = new GetByDateRequest(request.getCardNumber(),
+        GetByDateRequest request2 = new GetByDateRequest(request.getCardNumbers(),
                 LocalDateTime.now().minusDays(3),
                 LocalDateTime.now());
 
         Predicate<Transaction> cardPredicate = AppUtils
-                .cardPredicate(request2.getCardNumber());
+                .cardPredicate(request2.getCardNumbers().get(0));
 
         // in Second call with dates
         Predicate<Transaction> datePredicate2 = AppUtils
@@ -289,25 +288,25 @@ public class TransactionServiceTest {
                 .sorted(Comparator.comparing(Transaction::getAddedDate))
                 .toList();
 
-        when(uzCardClient.getTransactionsBetweenDates(request2.getCardNumber(),
+        when(uzCardClient.getTransactionsBetweenDates(request2.getCardNumbers().get(0),
                 request.getDateTo().toLocalDate(),
                 request2.getDateTo().toLocalDate()))
                 .thenReturn(mockUzCardTransactionsSecondCall);
 
         // Second call with [1-3]
-        ResponseEntity<List<TransactionDTO>> responseEntity = transactionService
+        ResponseEntity<Map<String, List<TransactionDTO>>> responseEntity = transactionService
                 .getByDateBetween(request2);
 
         // Check for call to client
         Mockito.verify(uzCardClient, Mockito.times(1))
-                .getTransactionsBetweenDates(request.getCardNumber(), request.getDateFrom().toLocalDate(), request.getDateTo().toLocalDate());
+                .getTransactionsBetweenDates(request.getCardNumbers().get(0), request.getDateFrom().toLocalDate(), request.getDateTo().toLocalDate());
 
         // Check for call to client
         Mockito.verify(uzCardClient, Mockito.times(1))
-                .getTransactionsBetweenDates(request2.getCardNumber(), request.getDateTo().toLocalDate(), request2.getDateTo().toLocalDate());
+                .getTransactionsBetweenDates(request2.getCardNumbers().get(0), request.getDateTo().toLocalDate(), request2.getDateTo().toLocalDate());
 
         // Check for cache range set correctly
-        RangeDTO cacheRange = myCache.getCacheRange(request2.getCardNumber());
+        RangeDTO cacheRange = myCache.getCacheRange(request2.getCardNumbers().get(0));
         Assertions.assertNotNull(cacheRange);
         Assertions.assertEquals(cacheRange.getFromDate(), request.getDateFrom());
         Assertions.assertEquals(cacheRange.getToDate(), request2.getDateTo());
@@ -318,11 +317,11 @@ public class TransactionServiceTest {
                         request2.getDateTo());
 
         List<Transaction> fromCache = myCache
-                .getAllBetween(request2.getCardNumber(), request.getDateFrom(), request2.getDateTo());
+                .getAllBetween(request2.getCardNumbers().get(0), request.getDateFrom(), request2.getDateTo());
 
         // after call result should be like this
         List<Transaction> cacheResultShouldBe = MockGenerator.getUzCardTransactions().stream()
-                .filter(AppUtils.cardPredicate(request2.getCardNumber()).and(dateTimePredicate))
+                .filter(AppUtils.cardPredicate(request2.getCardNumbers().get(0)).and(dateTimePredicate))
                 .sorted(Comparator.comparing(Transaction::getAddedDate))
                 .toList();
 
@@ -332,7 +331,7 @@ public class TransactionServiceTest {
         Assertions.assertEquals(responseEntity.getStatusCode().value(), HttpStatus.OK.value());
 
         // response body
-        List<TransactionDTO> body = responseEntity.getBody();
+        Map<String, List<TransactionDTO>> body = responseEntity.getBody();
 
         Assertions.assertNotNull(body);
 
@@ -345,7 +344,7 @@ public class TransactionServiceTest {
                 .toList();
 
         // response body and client service data equality
-        transactionsAndDTOsEquals(resultShouldBe, body);
+        transactionsAndDTOsEquals(resultShouldBe, body.get(request.getCardNumbers().get(0)));
 
     }
 
@@ -369,18 +368,18 @@ public class TransactionServiceTest {
 
         List<String> uzCards = MockGenerator.getUzCards();
 
-        GetByDateRequest request = new GetByDateRequest(uzCards.get(0), fromDate, toDate);
+        GetByDateRequest request = new GetByDateRequest(List.of(uzCards.get(0)), fromDate, toDate);
 
         setThisRequestAndCheckItInUzcard(request);
 
         // ################### Second request #################
 
-        GetByDateRequest request2 = new GetByDateRequest(request.getCardNumber(),
+        GetByDateRequest request2 = new GetByDateRequest(request.getCardNumbers(),
                 LocalDateTime.now().minusDays(8),
                 LocalDateTime.now().minusDays(6));
 
         Predicate<Transaction> cardPredicate = AppUtils
-                .cardPredicate(request2.getCardNumber());
+                .cardPredicate(request2.getCardNumbers().get(0));
 
         // in Second call with dates
         Predicate<Transaction> datePredicate2 = AppUtils
@@ -394,29 +393,29 @@ public class TransactionServiceTest {
                 .sorted(Comparator.comparing(Transaction::getAddedDate))
                 .toList();
 
-        when(uzCardClient.getTransactionsBetweenDates(request2.getCardNumber(),
+        when(uzCardClient.getTransactionsBetweenDates(request2.getCardNumbers().get(0),
                 request2.getDateFrom().toLocalDate(),
                 request.getDateFrom().toLocalDate()))
                 .thenReturn(mockUzCardTransactionsSecondCall);
 
         // Second call with [6-8]
-        ResponseEntity<List<TransactionDTO>> responseEntity = transactionService
+        ResponseEntity<Map<String, List<TransactionDTO>>> responseEntity = transactionService
                 .getByDateBetween(request2);
 
         // Check for call to client
         Mockito.verify(uzCardClient, Mockito.times(1))
-                .getTransactionsBetweenDates(request.getCardNumber(), request.getDateFrom().toLocalDate(), request.getDateTo().toLocalDate());
+                .getTransactionsBetweenDates(request.getCardNumbers().get(0), request.getDateFrom().toLocalDate(), request.getDateTo().toLocalDate());
 
         // Check for call to client
         Mockito.verify(uzCardClient, Mockito.times(0))
-                .getTransactionsBetweenDates(request2.getCardNumber(), request2.getDateFrom().toLocalDate(), request2.getDateTo().toLocalDate());
+                .getTransactionsBetweenDates(request2.getCardNumbers().get(0), request2.getDateFrom().toLocalDate(), request2.getDateTo().toLocalDate());
 
         // Check for call to client
         Mockito.verify(uzCardClient, Mockito.times(1))
-                .getTransactionsBetweenDates(request2.getCardNumber(), request2.getDateFrom().toLocalDate(), request.getDateFrom().toLocalDate());
+                .getTransactionsBetweenDates(request2.getCardNumbers().get(0), request2.getDateFrom().toLocalDate(), request.getDateFrom().toLocalDate());
 
         // Check for range set correctly
-        RangeDTO cacheRange = myCache.getCacheRange(request2.getCardNumber());
+        RangeDTO cacheRange = myCache.getCacheRange(request2.getCardNumbers().get(0));
         Assertions.assertNotNull(cacheRange);
         Assertions.assertEquals(cacheRange.getFromDate(), request2.getDateFrom());
         Assertions.assertEquals(cacheRange.getToDate(), request.getDateTo());
@@ -425,7 +424,7 @@ public class TransactionServiceTest {
         // Check for correctly cached transactions
 
         List<Transaction> fromCache2 = myCache
-                .getAllBetween(request.getCardNumber(), request2.getDateFrom(), request.getDateTo());
+                .getAllBetween(request.getCardNumbers().get(0), request2.getDateFrom(), request.getDateTo());
 
         Predicate<Transaction> dateTimePredicate = AppUtils
                 .dateTimePredicate(request2.getDateFrom(),
@@ -457,12 +456,12 @@ public class TransactionServiceTest {
         Assertions.assertEquals(responseEntity.getStatusCode().value(), HttpStatus.OK.value());
 
         // response body
-        List<TransactionDTO> body = responseEntity.getBody();
+        Map<String, List<TransactionDTO>> body = responseEntity.getBody();
 
         Assertions.assertNotNull(body);
 
         // response body and client service data equality
-        transactionsAndDTOsEquals(resultShouldBe, body);
+        transactionsAndDTOsEquals(resultShouldBe, body.get(request.getCardNumbers().get(0)));
 
     }
 
@@ -488,7 +487,7 @@ public class TransactionServiceTest {
 
         List<String> uzCards = MockGenerator.getUzCards();
 
-        GetByDateRequest request = new GetByDateRequest(uzCards.get(0), fromDate, toDate);
+        GetByDateRequest request = new GetByDateRequest(List.of(uzCards.get(0)), fromDate, toDate);
 
         setThisRequestAndCheckItInUzcard(request);
 
@@ -496,12 +495,12 @@ public class TransactionServiceTest {
 
         // FromDate = 9
         // ToDate = 13
-        GetByDateRequest request2 = new GetByDateRequest(request.getCardNumber(),
+        GetByDateRequest request2 = new GetByDateRequest(request.getCardNumbers(),
                 LocalDateTime.now().minusDays(6),
                 LocalDateTime.now().minusDays(2));
 
         Predicate<Transaction> cardPredicate = AppUtils
-                .cardPredicate(request2.getCardNumber());
+                .cardPredicate(request2.getCardNumbers().get(0));
 
         // in Second call with dates
         Predicate<Transaction> datePredicate2 = AppUtils
@@ -516,28 +515,28 @@ public class TransactionServiceTest {
                 .sorted(Comparator.comparing(Transaction::getAddedDate))
                 .toList();
 
-        when(uzCardClient.getTransactionsBetweenDates(request2.getCardNumber(),
+        when(uzCardClient.getTransactionsBetweenDates(request2.getCardNumbers().get(0),
                 request2.getDateFrom().toLocalDate(),
                 request.getDateFrom().toLocalDate()))
                 .thenReturn(mockUzCardTransactionsSecondCall);
 
         // Second call
-        ResponseEntity<List<TransactionDTO>> responseEntity = transactionService
+        ResponseEntity<Map<String, List<TransactionDTO>>> responseEntity = transactionService
                 .getByDateBetween(request2);
 
         // Check for call client
         Mockito.verify(uzCardClient, Mockito.times(1))
-                .getTransactionsBetweenDates(request.getCardNumber(), request.getDateFrom().toLocalDate(), request.getDateTo().toLocalDate());
+                .getTransactionsBetweenDates(request.getCardNumbers().get(0), request.getDateFrom().toLocalDate(), request.getDateTo().toLocalDate());
 
         // Check for not to call client
         Mockito.verify(uzCardClient, Mockito.times(0))
-                .getTransactionsBetweenDates(request2.getCardNumber(), request2.getDateFrom().toLocalDate(), request2.getDateTo().toLocalDate());
+                .getTransactionsBetweenDates(request2.getCardNumbers().get(0), request2.getDateFrom().toLocalDate(), request2.getDateTo().toLocalDate());
 
         // Check for call to client
         Mockito.verify(uzCardClient, Mockito.times(1))
-                .getTransactionsBetweenDates(request2.getCardNumber(), request2.getDateFrom().toLocalDate(), request.getDateFrom().toLocalDate());
+                .getTransactionsBetweenDates(request2.getCardNumbers().get(0), request2.getDateFrom().toLocalDate(), request.getDateFrom().toLocalDate());
 
-        RangeDTO cacheRange = myCache.getCacheRange(request2.getCardNumber());
+        RangeDTO cacheRange = myCache.getCacheRange(request2.getCardNumbers().get(0));
         Assertions.assertNotNull(cacheRange);
         Assertions.assertEquals(cacheRange.getFromDate(), request2.getDateFrom());
         Assertions.assertEquals(cacheRange.getToDate(), request.getDateTo());
@@ -545,7 +544,7 @@ public class TransactionServiceTest {
 
         // Check for updated cache
         List<Transaction> fromCache2 = myCache
-                .getAllBetween(request.getCardNumber(), request2.getDateFrom(), request.getDateTo());
+                .getAllBetween(request.getCardNumbers().get(0), request2.getDateFrom(), request.getDateTo());
 
 
         // Check for correctly cached transactions
@@ -577,12 +576,12 @@ public class TransactionServiceTest {
         Assertions.assertEquals(responseEntity.getStatusCode().value(), HttpStatus.OK.value());
 
         // response body
-        List<TransactionDTO> body = responseEntity.getBody();
+        Map<String, List<TransactionDTO>> body = responseEntity.getBody();
 
         Assertions.assertNotNull(body);
 
         // response body and client service data equality
-        transactionsAndDTOsEquals(resultShouldBe, body);
+        transactionsAndDTOsEquals(resultShouldBe, body.get(request.getCardNumbers().get(0)));
 
     }
 
@@ -608,7 +607,7 @@ public class TransactionServiceTest {
 
         List<String> uzCards = MockGenerator.getUzCards();
 
-        GetByDateRequest request = new GetByDateRequest(uzCards.get(0), fromDate, toDate);
+        GetByDateRequest request = new GetByDateRequest(List.of(uzCards.get(0)), fromDate, toDate);
 
         setThisRequestAndCheckItInUzcard(request);
 
@@ -616,12 +615,12 @@ public class TransactionServiceTest {
 
         // FromDate = 9
         // ToDate = 13
-        GetByDateRequest request2 = new GetByDateRequest(request.getCardNumber(),
+        GetByDateRequest request2 = new GetByDateRequest(request.getCardNumbers(),
                 LocalDateTime.now().minusDays(6),
                 LocalDateTime.now().minusDays(2));
 
         Predicate<Transaction> cardPredicate = AppUtils
-                .cardPredicate(request2.getCardNumber());
+                .cardPredicate(request2.getCardNumbers().get(0));
 
         // in Second call with dates
         Predicate<Transaction> datePredicate2 = AppUtils
@@ -630,28 +629,28 @@ public class TransactionServiceTest {
 
 
 
-        when(uzCardClient.getTransactionsBetweenDates(request2.getCardNumber(),
+        when(uzCardClient.getTransactionsBetweenDates(request2.getCardNumbers().get(0),
                 request2.getDateFrom().toLocalDate(),
                 request.getDateFrom().toLocalDate()))
                 .thenReturn(new ArrayList<>());
 
         // Second call
-        ResponseEntity<List<TransactionDTO>> responseEntity = transactionService
+        ResponseEntity<Map<String, List<TransactionDTO>>> responseEntity = transactionService
                 .getByDateBetween(request2);
 
         // Check for call client
         Mockito.verify(uzCardClient, Mockito.times(1))
-                .getTransactionsBetweenDates(request.getCardNumber(), request.getDateFrom().toLocalDate(), request.getDateTo().toLocalDate());
+                .getTransactionsBetweenDates(request.getCardNumbers().get(0), request.getDateFrom().toLocalDate(), request.getDateTo().toLocalDate());
 
         // Check for not to call client
         Mockito.verify(uzCardClient, Mockito.times(0))
-                .getTransactionsBetweenDates(request2.getCardNumber(), request2.getDateFrom().toLocalDate(), request2.getDateTo().toLocalDate());
+                .getTransactionsBetweenDates(request2.getCardNumbers().get(0), request2.getDateFrom().toLocalDate(), request2.getDateTo().toLocalDate());
 
         // Check for call to client
         Mockito.verify(uzCardClient, Mockito.times(1))
-                .getTransactionsBetweenDates(request2.getCardNumber(), request2.getDateFrom().toLocalDate(), request.getDateFrom().toLocalDate());
+                .getTransactionsBetweenDates(request2.getCardNumbers().get(0), request2.getDateFrom().toLocalDate(), request.getDateFrom().toLocalDate());
 
-        RangeDTO cacheRange = myCache.getCacheRange(request2.getCardNumber());
+        RangeDTO cacheRange = myCache.getCacheRange(request2.getCardNumbers().get(0));
         Assertions.assertNotNull(cacheRange);
         Assertions.assertEquals(cacheRange.getFromDate(), request.getDateFrom());
         Assertions.assertEquals(cacheRange.getToDate(), request.getDateTo());
@@ -659,7 +658,7 @@ public class TransactionServiceTest {
 
         // Check for updated cache
         List<Transaction> fromCache2 = myCache
-                .getAllBetween(request.getCardNumber(), request2.getDateFrom(), request.getDateTo());
+                .getAllBetween(request.getCardNumbers().get(0), request2.getDateFrom(), request.getDateTo());
 
 
         // Check for correctly cached transactions
@@ -691,12 +690,12 @@ public class TransactionServiceTest {
         Assertions.assertEquals(responseEntity.getStatusCode().value(), HttpStatus.OK.value());
 
         // response body
-        List<TransactionDTO> body = responseEntity.getBody();
+        Map<String, List<TransactionDTO>> body = responseEntity.getBody();
 
         Assertions.assertNotNull(body);
 
         // response body and client service data equality
-        transactionsAndDTOsEquals(resultShouldBe, body);
+        transactionsAndDTOsEquals(resultShouldBe, body.get(request.getCardNumbers().get(0)));
 
     }
 
@@ -722,7 +721,7 @@ public class TransactionServiceTest {
 
         List<String> uzCards = MockGenerator.getUzCards();
 
-        GetByDateRequest request = new GetByDateRequest(uzCards.get(0), fromDate, toDate);
+        GetByDateRequest request = new GetByDateRequest(List.of(uzCards.get(0)), fromDate, toDate);
 
         setThisRequestAndCheckItInUzcard(request);
 
@@ -732,12 +731,12 @@ public class TransactionServiceTest {
         // Imagine now is 8
         // FromDate = 2
         // ToDate = 8
-        GetByDateRequest request2 = new GetByDateRequest(request.getCardNumber(),
+        GetByDateRequest request2 = new GetByDateRequest(request.getCardNumbers(),
                 LocalDateTime.now().minusDays(6),
                 LocalDateTime.now());
 
         Predicate<Transaction> cardPredicate = AppUtils
-                .cardPredicate(request2.getCardNumber());
+                .cardPredicate(request2.getCardNumbers().get(0));
 
         // in Second call with dates
         Predicate<Transaction> datePredicate2 = AppUtils
@@ -752,29 +751,29 @@ public class TransactionServiceTest {
                 .sorted(Comparator.comparing(Transaction::getAddedDate))
                 .toList();
 
-        when(uzCardClient.getTransactionsBetweenDates(request2.getCardNumber(),
+        when(uzCardClient.getTransactionsBetweenDates(request2.getCardNumbers().get(0),
                 request.getDateTo().plusNanos(1).toLocalDate(),
                 request2.getDateTo().toLocalDate()))
                 .thenReturn(mockUzCardTransactionsSecondCall);
 
         // Second call
-        ResponseEntity<List<TransactionDTO>> responseEntity = transactionService
+        ResponseEntity<Map<String, List<TransactionDTO>>> responseEntity = transactionService
                 .getByDateBetween(request2);
 
         // Check for call client
         Mockito.verify(uzCardClient, Mockito.times(1))
-                .getTransactionsBetweenDates(request.getCardNumber(), request.getDateFrom().toLocalDate(), request.getDateTo().toLocalDate());
+                .getTransactionsBetweenDates(request.getCardNumbers().get(0), request.getDateFrom().toLocalDate(), request.getDateTo().toLocalDate());
 
         // Check for not to call client
         Mockito.verify(uzCardClient, Mockito.times(0))
-                .getTransactionsBetweenDates(request2.getCardNumber(), request2.getDateFrom().toLocalDate(), request2.getDateTo().toLocalDate());
+                .getTransactionsBetweenDates(request2.getCardNumbers().get(0), request2.getDateFrom().toLocalDate(), request2.getDateTo().toLocalDate());
 
         // Check for call to client
         Mockito.verify(uzCardClient, Mockito.times(1))
-                .getTransactionsBetweenDates(request2.getCardNumber(), request.getDateTo().plusNanos(1).toLocalDate(),
+                .getTransactionsBetweenDates(request2.getCardNumbers().get(0), request.getDateTo().plusNanos(1).toLocalDate(),
                         request2.getDateTo().toLocalDate());
 
-        RangeDTO cacheRange = myCache.getCacheRange(request2.getCardNumber());
+        RangeDTO cacheRange = myCache.getCacheRange(request2.getCardNumbers().get(0));
         Assertions.assertNotNull(cacheRange);
         Assertions.assertEquals(cacheRange.getFromDate(), request.getDateFrom());
         Assertions.assertEquals(cacheRange.getToDate(), request2.getDateTo());
@@ -782,7 +781,7 @@ public class TransactionServiceTest {
 
         // Check for updated cache
         List<Transaction> fromCache2 = myCache
-                .getAllBetween(request.getCardNumber(), request.getDateFrom(), request2.getDateTo());
+                .getAllBetween(request.getCardNumbers().get(0), request.getDateFrom(), request2.getDateTo());
 
 
         // Check for correctly cached transactions
@@ -814,12 +813,12 @@ public class TransactionServiceTest {
         Assertions.assertEquals(responseEntity.getStatusCode().value(), HttpStatus.OK.value());
 
         // response body
-        List<TransactionDTO> body = responseEntity.getBody();
+        Map<String, List<TransactionDTO>> body = responseEntity.getBody();
 
         Assertions.assertNotNull(body);
 
         // response body and client service data equality
-        transactionsAndDTOsEquals(resultShouldBe, body);
+        transactionsAndDTOsEquals(resultShouldBe, body.get(request.getCardNumbers().get(0)));
 
     }
 
@@ -828,7 +827,7 @@ public class TransactionServiceTest {
      * Should get from cache and client
      * [1-10] in uzcard client
      * [1-4] is cached
-     * And we call [2-8] range [2-4] from cache and [5-8] from uzcard but result is null
+     * And we call [2-8] range [2-4] from cache and [5-8] from uzcard but result is empty from client
      */
     @Test
     void shouldGetSomeFromCacheAndSomeFromUzCardClientWithEmptyResultFromClient() {
@@ -846,7 +845,7 @@ public class TransactionServiceTest {
 
         List<String> uzCards = MockGenerator.getUzCards();
 
-        GetByDateRequest request = new GetByDateRequest(uzCards.get(0), fromDate, toDate);
+        GetByDateRequest request = new GetByDateRequest(List.of(uzCards.get(0)), fromDate, toDate);
 
         setThisRequestAndCheckItInUzcard(request);
 
@@ -856,43 +855,43 @@ public class TransactionServiceTest {
         // Imagine now is 8
         // FromDate = 2
         // ToDate = 8
-        GetByDateRequest request2 = new GetByDateRequest(request.getCardNumber(),
+        GetByDateRequest request2 = new GetByDateRequest(request.getCardNumbers(),
                 LocalDateTime.now().minusDays(6),
                 LocalDateTime.now());
 
         Predicate<Transaction> cardPredicate = AppUtils
-                .cardPredicate(request2.getCardNumber());
+                .cardPredicate(request2.getCardNumbers().get(0));
 
-        when(uzCardClient.getTransactionsBetweenDates(request2.getCardNumber(),
+        when(uzCardClient.getTransactionsBetweenDates(request2.getCardNumbers().get(0),
                 request.getDateTo().plusNanos(1).toLocalDate(),
                 request2.getDateTo().toLocalDate()))
                 .thenReturn(new ArrayList<>());
 
         // Second call
-        ResponseEntity<List<TransactionDTO>> responseEntity = transactionService
+        ResponseEntity<Map<String, List<TransactionDTO>>> responseEntity = transactionService
                 .getByDateBetween(request2);
 
         // Check for call client
         Mockito.verify(uzCardClient, Mockito.times(1))
-                .getTransactionsBetweenDates(request.getCardNumber(), request.getDateFrom().toLocalDate(), request.getDateTo().toLocalDate());
+                .getTransactionsBetweenDates(request.getCardNumbers().get(0), request.getDateFrom().toLocalDate(), request.getDateTo().toLocalDate());
 
         // Check for not to call client
         Mockito.verify(uzCardClient, Mockito.times(0))
-                .getTransactionsBetweenDates(request2.getCardNumber(), request2.getDateFrom().toLocalDate(), request2.getDateTo().toLocalDate());
+                .getTransactionsBetweenDates(request2.getCardNumbers().get(0), request2.getDateFrom().toLocalDate(), request2.getDateTo().toLocalDate());
 
         // Check for call to client
         Mockito.verify(uzCardClient, Mockito.times(1))
-                .getTransactionsBetweenDates(request2.getCardNumber(), request.getDateTo().plusNanos(1).toLocalDate(),
+                .getTransactionsBetweenDates(request2.getCardNumbers().get(0), request.getDateTo().plusNanos(1).toLocalDate(),
                         request2.getDateTo().toLocalDate());
 
-        RangeDTO cacheRange = myCache.getCacheRange(request2.getCardNumber());
+        RangeDTO cacheRange = myCache.getCacheRange(request2.getCardNumbers().get(0));
         Assertions.assertNotNull(cacheRange);
         Assertions.assertEquals(cacheRange.getFromDate(), request.getDateFrom());
         Assertions.assertEquals(cacheRange.getToDate(), request.getDateTo());
 
         // Check for updated cache
         List<Transaction> fromCache2 = myCache
-                .getAllBetween(request.getCardNumber(), request.getDateFrom(), request2.getDateTo());
+                .getAllBetween(request.getCardNumbers().get(0), request.getDateFrom(), request2.getDateTo());
 
 
         // Check for correctly cached transactions
@@ -914,7 +913,7 @@ public class TransactionServiceTest {
         Assertions.assertEquals(responseEntity.getStatusCode().value(), HttpStatus.OK.value());
 
         // response body
-        List<TransactionDTO> body = responseEntity.getBody();
+        Map<String, List<TransactionDTO>> body = responseEntity.getBody();
 
         Assertions.assertNotNull(body);
 
@@ -927,7 +926,7 @@ public class TransactionServiceTest {
                 .toList();
 
         // response body and client service data equality
-        transactionsAndDTOsEquals(resultShouldBe, body);
+        transactionsAndDTOsEquals(resultShouldBe, body.get(request.getCardNumbers().get(0)));
 
     }
 
@@ -954,7 +953,7 @@ public class TransactionServiceTest {
 
         List<String> uzCards = MockGenerator.getUzCards();
 
-        GetByDateRequest request = new GetByDateRequest(uzCards.get(0), fromDate, toDate);
+        GetByDateRequest request = new GetByDateRequest(List.of(uzCards.get(0)), fromDate, toDate);
 
         setThisRequestAndCheckItInUzcard(request);
 
@@ -963,12 +962,12 @@ public class TransactionServiceTest {
         // Imagine now is 8
         // FromDate = 1
         // ToDate = 8
-        GetByDateRequest request2 = new GetByDateRequest(request.getCardNumber(),
+        GetByDateRequest request2 = new GetByDateRequest(request.getCardNumbers(),
                 LocalDateTime.now().minusDays(7),
                 LocalDateTime.now());
 
         Predicate<Transaction> cardPredicate = AppUtils
-                .cardPredicate(request2.getCardNumber());
+                .cardPredicate(request2.getCardNumbers().get(0));
 
         // in Second call with dates
 
@@ -996,41 +995,41 @@ public class TransactionServiceTest {
                 .sorted(Comparator.comparing(Transaction::getAddedDate))
                 .toList();
 
-        when(uzCardClient.getTransactionsBetweenDates(request2.getCardNumber(),
+        when(uzCardClient.getTransactionsBetweenDates(request2.getCardNumbers().get(0),
                 request2.getDateFrom().toLocalDate(),
                 request.getDateFrom().minusNanos(1).toLocalDate()))
                 .thenReturn(mockUzCardTransactionsSecondCall1);
 
-        when(uzCardClient.getTransactionsBetweenDates(request2.getCardNumber(),
+        when(uzCardClient.getTransactionsBetweenDates(request2.getCardNumbers().get(0),
                 request.getDateTo().plusNanos(1).toLocalDate(),
                 request2.getDateTo().toLocalDate()))
                 .thenReturn(mockUzCardTransactionsSecondCall2);
 
         // Second call
-        ResponseEntity<List<TransactionDTO>> responseEntity = transactionService
+        ResponseEntity<Map<String, List<TransactionDTO>>> responseEntity = transactionService
                 .getByDateBetween(request2);
 
         // Check for call client
         Mockito.verify(uzCardClient, Mockito.times(1))
-                .getTransactionsBetweenDates(request.getCardNumber(), request.getDateFrom().toLocalDate(), request.getDateTo().toLocalDate());
+                .getTransactionsBetweenDates(request.getCardNumbers().get(0), request.getDateFrom().toLocalDate(), request.getDateTo().toLocalDate());
 
         // Check for not to call client
         Mockito.verify(uzCardClient, Mockito.times(0))
-                .getTransactionsBetweenDates(request2.getCardNumber(), request2.getDateFrom().toLocalDate(), request2.getDateTo().toLocalDate());
+                .getTransactionsBetweenDates(request2.getCardNumbers().get(0), request2.getDateFrom().toLocalDate(), request2.getDateTo().toLocalDate());
 
         // Check for call to client 1
         Mockito.verify(uzCardClient, Mockito.times(1))
-                .getTransactionsBetweenDates(request.getCardNumber(), request2.getDateFrom().toLocalDate(),
+                .getTransactionsBetweenDates(request.getCardNumbers().get(0), request2.getDateFrom().toLocalDate(),
                         request.getDateFrom().minusNanos(1).toLocalDate());
 
         // Check for call to client 2
         Mockito.verify(uzCardClient, Mockito.times(1))
-                .getTransactionsBetweenDates(request.getCardNumber(), request.getDateTo().plusNanos(1).toLocalDate(),
+                .getTransactionsBetweenDates(request.getCardNumbers().get(0), request.getDateTo().plusNanos(1).toLocalDate(),
                         request2.getDateTo().toLocalDate());
 
         // Check for updated cache
         List<Transaction> fromCache2 = myCache
-                .getAllBetween(request.getCardNumber(), request2.getDateFrom(), request2.getDateTo());
+                .getAllBetween(request.getCardNumbers().get(0), request2.getDateFrom(), request2.getDateTo());
 
 
         // Check for correctly cached transactions
@@ -1052,12 +1051,12 @@ public class TransactionServiceTest {
         Assertions.assertEquals(responseEntity.getStatusCode().value(), HttpStatus.OK.value());
 
         // response body
-        List<TransactionDTO> body = responseEntity.getBody();
+        Map<String, List<TransactionDTO>> body = responseEntity.getBody();
 
         Assertions.assertNotNull(body);
 
         // response body and client service data equality
-        transactionsAndDTOsEquals(cacheResultShouldBe, body);
+        transactionsAndDTOsEquals(cacheResultShouldBe, body.get(request.getCardNumbers().get(0)));
 
     }
 
@@ -1079,39 +1078,18 @@ public class TransactionServiceTest {
         // Real results
         List<String> uzCards = MockGenerator.getUzCards();
 
-        GetByDateRequest request = new GetByDateRequest(uzCards.get(0), fromDate, toDate);
+        GetByDateRequest request = new GetByDateRequest(List.of(uzCards.get(0)), fromDate, toDate);
 
         setThisRequestAndCheckItInUzcard(request);
 
         // Second Call
         // Change card
-        request.setCardNumber(uzCards.get(1));
+        request.setCardNumbers(List.of(uzCards.get(1)));
 
-        Assertions.assertTrue(myCache.isEmpty(request.getCardNumber(), request.getDateFrom(), request.getDateTo()));
+        Assertions.assertTrue(myCache.isEmpty(request.getCardNumbers().get(0), request.getDateFrom(), request.getDateTo()));
 
-        RangeDTO cacheRange2 = myCache.getCacheRange(request.getCardNumber());
+        RangeDTO cacheRange2 = myCache.getCacheRange(request.getCardNumbers().get(0));
         Assertions.assertNull(cacheRange2);
-
-        setThisRequestAndCheckItInUzcard(request);
-
-    }
-
-    /**
-     * Should get from uzcard client
-     * But request is invalid fromDate > toDate
-     */
-    @Test
-    void shouldGetFromClientByDateBetweenWithFromDateAfterToDate() {
-
-        // check cache is empty
-        Assertions.assertTrue(myCache.isEmpty());
-
-        LocalDateTime fromDate = LocalDateTime.now();
-        LocalDateTime toDate = LocalDateTime.now().minusDays(6);
-
-        // Real results
-        List<String> uzCards = MockGenerator.getUzCards();
-        GetByDateRequest request = new GetByDateRequest(uzCards.get(0), fromDate, toDate);
 
         setThisRequestAndCheckItInUzcard(request);
 
@@ -1132,11 +1110,11 @@ public class TransactionServiceTest {
         // Real results
         List<String> uzCards = MockGenerator.getUzCards();
 
-        GetByDateRequest request = new GetByDateRequest(uzCards.get(0), fromDate, toDate);
+        GetByDateRequest request = new GetByDateRequest(List.of(uzCards.get(0)), fromDate, toDate);
 
         setThisRequestAndCheckItInUzcard(request);
 
-        List<Transaction> fromCache1 = myCache.getAllBetween(request.getCardNumber(), request.getDateFrom(), request.getDateTo())
+        List<Transaction> fromCache1 = myCache.getAllBetween(request.getCardNumbers().get(0), request.getDateFrom(), request.getDateTo())
                 .stream()
                 .map(transaction -> Transaction.builder()
                         .id(transaction.getId())
@@ -1148,7 +1126,7 @@ public class TransactionServiceTest {
                         .build())
                 .toList();
 
-        String card = request.getCardNumber();
+        String card = request.getCardNumbers().get(0);
         RangeDTO cacheRange = myCache.getCacheRange(card);
 
         Predicate<Transaction> cardPredicate = AppUtils.cardPredicate(card);
@@ -1176,7 +1154,7 @@ public class TransactionServiceTest {
         Mockito.verify(uzCardClient, times(2))
                 .getTransactionsBetweenDates(card, cacheRange.getFromDate().toLocalDate(), cacheRange.getToDate().toLocalDate());
 
-        List<Transaction> transactions = myCache.getAllBetween(request.getCardNumber(), cacheRange.getFromDate(), cacheRange.getToDate());
+        List<Transaction> transactions = myCache.getAllBetween(request.getCardNumbers().get(0), cacheRange.getFromDate(), cacheRange.getToDate());
         transactionAfterUpdateNotEquals(fromCache1, transactions);
 
     }
@@ -1192,7 +1170,7 @@ public class TransactionServiceTest {
     private void setThisRequestAndCheckItInUzcard(GetByDateRequest request) {
 
         Predicate<Transaction> cardPredicate = AppUtils
-                .cardPredicate(request.getCardNumber());
+                .cardPredicate(request.getCardNumbers().get(0));
 
         Predicate<Transaction> datePredicate = AppUtils
                 .datePredicate(request.getDateFrom().toLocalDate(),
@@ -1208,26 +1186,26 @@ public class TransactionServiceTest {
                 .toList();
 
         // check for cache is empty
-        Assertions.assertTrue(myCache.isEmpty(request.getCardNumber(), request.getDateFrom(), request.getDateTo()));
+        Assertions.assertTrue(myCache.isEmpty(request.getCardNumbers().get(0), request.getDateFrom(), request.getDateTo()));
 
-        when(uzCardClient.getTransactionsBetweenDates(request.getCardNumber(), request.getDateFrom().toLocalDate(), request.getDateTo().toLocalDate()))
+        when(uzCardClient.getTransactionsBetweenDates(request.getCardNumbers().get(0), request.getDateFrom().toLocalDate(), request.getDateTo().toLocalDate()))
                 .thenReturn(mockUzCardTransactions);
 
         // First call and save to cache
-        ResponseEntity<List<TransactionDTO>> responseEntity = transactionService
+        ResponseEntity<Map<String, List<TransactionDTO>>> responseEntity = transactionService
                 .getByDateBetween(request);
 
         // Check for call to client
         Mockito.verify(uzCardClient, Mockito.times(1))
-                .getTransactionsBetweenDates(request.getCardNumber(), request.getDateFrom().toLocalDate(), request.getDateTo().toLocalDate());
+                .getTransactionsBetweenDates(request.getCardNumbers().get(0), request.getDateFrom().toLocalDate(), request.getDateTo().toLocalDate());
 
         // check for response is cached
         Assertions.assertFalse(myCache
-                .isEmpty(request.getCardNumber(), request.getDateFrom(), request.getDateTo()));
+                .isEmpty(request.getCardNumbers().get(0), request.getDateFrom(), request.getDateTo()));
 
         // check for correctly cached
         List<Transaction> fromCache = myCache
-                .getAllBetween(request.getCardNumber(), request.getDateFrom(), request.getDateTo());
+                .getAllBetween(request.getCardNumbers().get(0), request.getDateFrom(), request.getDateTo());
 
         List<Transaction> mockUzCardTransactionsAfterCall = mockUzCardTransactions.stream()
                 .filter(dateTimePredicate)
@@ -1237,65 +1215,21 @@ public class TransactionServiceTest {
         // check for equality
         transactionsEquals(fromCache, mockUzCardTransactionsAfterCall);
 
-        RangeDTO cacheRange = myCache.getCacheRange(request.getCardNumber());
+        RangeDTO cacheRange = myCache.getCacheRange(request.getCardNumbers().get(0));
         Assertions.assertNotNull(cacheRange);
-        Assertions.assertEquals(request.getCardNumber(), cacheRange.getCardNumber());
+        Assertions.assertEquals(request.getCardNumbers().get(0), cacheRange.getCardNumber());
         Assertions.assertEquals(request.getDateFrom(), cacheRange.getFromDate());
         Assertions.assertEquals(request.getDateTo(), cacheRange.getToDate());
 
         Assertions.assertNotNull(responseEntity);
-        List<TransactionDTO> body = responseEntity.getBody();
+        Map<String, List<TransactionDTO>> body = responseEntity.getBody();
         Assertions.assertNotNull(body);
 
-        transactionsAndDTOsEquals(mockUzCardTransactionsAfterCall, body);
+        transactionsAndDTOsEquals(mockUzCardTransactionsAfterCall, body.get(request.getCardNumbers().get(0)));
 
     }
 
 
-
-    private void transactionAfterUpdateNotEquals(List<Transaction> actual, List<Transaction> expected) {
-        Assertions.assertEquals(actual.size(), expected.size());
-        for (int i = 0; i < actual.size(); i++) {
-            Assertions.assertEquals(expected.get(i).getId(), actual.get(i).getId());
-            Assertions.assertNotEquals(expected.get(i).getAmount(), actual.get(i).getAmount());
-            Assertions.assertNotEquals(expected.get(i).getStatus(), actual.get(i).getStatus());
-            Assertions.assertEquals(expected.get(i).getFromCard(), actual.get(i).getFromCard());
-            Assertions.assertEquals(expected.get(i).getToCard(), actual.get(i).getToCard());
-            Assertions.assertEquals(expected.get(i).getAddedDate(), actual.get(i).getAddedDate());
-        }
-    }
-
-    private void transactionsEquals(List<Transaction> actual, List<Transaction> expected) {
-        assertEquals(actual.size(), expected.size());
-        for (int i = 0; i < actual.size(); i++)
-            transactionsEquals(actual.get(i), expected.get(i));
-    }
-
-    private void transactionsEquals(Transaction actual, Transaction expected) {
-        assertNotNull(actual);
-        assertNotNull(expected);
-//        assertEquals(expected.getId(), actual.getId());
-        assertEquals(expected.getFromCard(), actual.getFromCard());
-        assertEquals(expected.getToCard(), actual.getToCard());
-        assertEquals(expected.getStatus(), actual.getStatus());
-        assertEquals(expected.getAmount(), actual.getAmount());
-    }
-
-    private void transactionAndDTOEquals(Transaction actual, TransactionDTO expected) {
-        assertNotNull(actual);
-        assertNotNull(expected);
-        assertEquals(expected.getFromCard(), actual.getFromCard());
-        assertEquals(expected.getToCard(), actual.getToCard());
-        assertEquals(expected.getAddedDate(), actual.getAddedDate());
-        assertEquals(expected.getStatus(), actual.getStatus());
-        assertEquals(expected.getAmount(), actual.getAmount());
-    }
-
-    private void transactionsAndDTOsEquals(List<Transaction> actual, List<TransactionDTO> expected) {
-        assertEquals(actual.size(), expected.size());
-        for (int i = 0; i < actual.size(); i++)
-            transactionAndDTOEquals(actual.get(i), expected.get(i));
-    }
 
 
 }

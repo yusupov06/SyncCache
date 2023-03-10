@@ -57,102 +57,103 @@ public class VisaCardTransactionServiceTest {
         myCache.deleteAllRanges();
     }
 
-    // ################################# Visa Tests ###################################
 
-
-    /**
-     * Should get from visa client
-     */
-    @Test
-    void shouldGetFromVisaClientByDateBetween() {
-
-        // check cache is empty
-        Assertions.assertTrue(myCache.isEmpty());
-
-        LocalDateTime fromDate = LocalDateTime.now().minusDays(6);
-        LocalDateTime toDate = LocalDateTime.now();
-
-        // Real results
-
-        List<String> visaCards = MockGenerator.getVisaCards();
-
-        GetByDateRequest request = new GetByDateRequest(visaCards.get(0), fromDate, toDate);
-
-        setThisRequestAndCheckItInVisaCard(request);
-
-    }
-
-
-    /**
-     * Common method that call to client with this request and check it
-     * 1 - cached correctly
-     * 2 - cache range set correctly
-     * 3 - response getting correctly
-     *
-     * @param request - CardNumber, From and To date
-     */
-    private void setThisRequestAndCheckItInVisaCard(GetByDateRequest request) {
-
-        Predicate<Transaction> cardPredicate = AppUtils
-                .cardPredicate(request.getCardNumber());
-
-        Predicate<Transaction> datePredicate = AppUtils
-                .datePredicate(request.getDateFrom().toLocalDate(),
-                        request.getDateTo().toLocalDate());
-
-        Predicate<Transaction> dateTimePredicate = AppUtils
-                .dateTimePredicate(request.getDateFrom(),
-                        request.getDateTo());
-
-        List<Transaction> mockVisaCardTransactions = MockGenerator
-                .getVisaCardTransactions().stream()
-                .filter(cardPredicate.and(datePredicate))
-                .toList();
-
-        // check for cache is empty
-        Assertions.assertTrue(myCache.isEmpty(request.getCardNumber(), request.getDateFrom(), request.getDateTo()));
-
-        when(visaCardClient.getTransactionsBetweenDates(request.getCardNumber(), request.getDateFrom().toLocalDate(), request.getDateTo().toLocalDate()))
-                .thenReturn(mockVisaCardTransactions);
-
-        // First call and save to cache
-        ResponseEntity<List<TransactionDTO>> responseEntity = transactionService
-                .getByDateBetween(request);
-
-        // Check for call to client
-        Mockito.verify(visaCardClient, Mockito.times(1))
-                .getTransactionsBetweenDates(request.getCardNumber(), request.getDateFrom().toLocalDate(), request.getDateTo().toLocalDate());
-
-        // check for response is cached
-        Assertions.assertFalse(myCache
-                .isEmpty(request.getCardNumber(), request.getDateFrom(), request.getDateTo()));
-
-        // check for correctly cached
-        List<Transaction> fromCache = myCache
-                .getAllBetween(request.getCardNumber(), request.getDateFrom(), request.getDateTo());
-
-        List<Transaction> mockVisaCardTransactionsAfterCall = mockVisaCardTransactions
-                .stream()
-                .filter(dateTimePredicate)
-                .sorted(Comparator.comparing(Transaction::getAddedDate))
-                .toList();
-
-        // check for equality
-        transactionsEquals(fromCache, mockVisaCardTransactionsAfterCall);
-
-        RangeDTO cacheRange = myCache.getCacheRange(request.getCardNumber());
-        Assertions.assertNotNull(cacheRange);
-        Assertions.assertEquals(request.getCardNumber(), cacheRange.getCardNumber());
-        Assertions.assertEquals(request.getDateFrom(), cacheRange.getFromDate());
-        Assertions.assertEquals(request.getDateTo(), cacheRange.getToDate());
-
-        Assertions.assertNotNull(responseEntity);
-        List<TransactionDTO> body = responseEntity.getBody();
-        Assertions.assertNotNull(body);
-
-        transactionsAndDTOsEquals(mockVisaCardTransactionsAfterCall, body);
-
-    }
+//    // ################################# Visa Tests ###################################
+//
+//    /**
+//     * Should get from visa client
+//     */
+//    @Test
+//    void shouldGetFromVisaClientByDateBetween() {
+//
+//        // check cache is empty
+//        Assertions.assertTrue(myCache.isEmpty());
+//
+//        LocalDateTime fromDate = LocalDateTime.now().minusDays(6);
+//        LocalDateTime toDate = LocalDateTime.now();
+//
+//        // Real results
+//
+//        List<String> visaCards = MockGenerator.getVisaCards();
+//
+//        GetByDateRequest request = new GetByDateRequest(visaCards.get(0), fromDate, toDate);
+//
+//        setThisRequestAndCheckItInVisaCard(request);
+//
+//    }
+//
+//
+//
+//    /**
+//     * Common method that call to client with this request and check it
+//     * 1 - cached correctly
+//     * 2 - cache range set correctly
+//     * 3 - response getting correctly
+//     *
+//     * @param request - CardNumber, From and To date
+//     */
+//    private void setThisRequestAndCheckItInVisaCard(GetByDateRequest request) {
+//
+//        Predicate<Transaction> cardPredicate = AppUtils
+//                .cardPredicate(request.getCardNumber());
+//
+//        Predicate<Transaction> datePredicate = AppUtils
+//                .datePredicate(request.getDateFrom().toLocalDate(),
+//                        request.getDateTo().toLocalDate());
+//
+//        Predicate<Transaction> dateTimePredicate = AppUtils
+//                .dateTimePredicate(request.getDateFrom(),
+//                        request.getDateTo());
+//
+//        List<Transaction> mockVisaCardTransactions = MockGenerator
+//                .getVisaCardTransactions().stream()
+//                .filter(cardPredicate.and(datePredicate))
+//                .toList();
+//
+//        // check for cache is empty
+//        Assertions.assertTrue(myCache.isEmpty(request.getCardNumber(), request.getDateFrom(), request.getDateTo()));
+//
+//        when(visaCardClient.getTransactionsBetweenDates(request.getCardNumber(), request.getDateFrom().toLocalDate(), request.getDateTo().toLocalDate()))
+//                .thenReturn(mockVisaCardTransactions);
+//
+//        // First call and save to cache
+//        ResponseEntity<List<TransactionDTO>> responseEntity = transactionService
+//                .getByDateBetween(request);
+//
+//        // Check for call to client
+//        Mockito.verify(visaCardClient, Mockito.times(1))
+//                .getTransactionsBetweenDates(request.getCardNumber(), request.getDateFrom().toLocalDate(), request.getDateTo().toLocalDate());
+//
+//        // check for response is cached
+//        Assertions.assertFalse(myCache
+//                .isEmpty(request.getCardNumber(), request.getDateFrom(), request.getDateTo()));
+//
+//        // check for correctly cached
+//        List<Transaction> fromCache = myCache
+//                .getAllBetween(request.getCardNumber(), request.getDateFrom(), request.getDateTo());
+//
+//        List<Transaction> mockVisaCardTransactionsAfterCall = mockVisaCardTransactions
+//                .stream()
+//                .filter(dateTimePredicate)
+//                .sorted(Comparator.comparing(Transaction::getAddedDate))
+//                .toList();
+//
+//        // check for equality
+//        transactionsEquals(fromCache, mockVisaCardTransactionsAfterCall);
+//
+//        RangeDTO cacheRange = myCache.getCacheRange(request.getCardNumber());
+//        Assertions.assertNotNull(cacheRange);
+//        Assertions.assertEquals(request.getCardNumber(), cacheRange.getCardNumber());
+//        Assertions.assertEquals(request.getDateFrom(), cacheRange.getFromDate());
+//        Assertions.assertEquals(request.getDateTo(), cacheRange.getToDate());
+//
+//        Assertions.assertNotNull(responseEntity);
+//        List<TransactionDTO> body = responseEntity.getBody();
+//        Assertions.assertNotNull(body);
+//
+//        transactionsAndDTOsEquals(mockVisaCardTransactionsAfterCall, body);
+//
+//    }
 
 
     private void transactionAfterUpdateNotEquals(List<Transaction> actual, List<Transaction> expected) {

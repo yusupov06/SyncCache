@@ -4,8 +4,11 @@ import uz.md.synccache.entity.Transaction;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 public interface GetTransactionsStrategy {
+
     String getCardPrefix();
-    List<Transaction> getTransactionsBetweenDays(String card, LocalDateTime dateFrom, LocalDateTime dateTo);
+
+    Map<String, List<Transaction>> getTransactionsBetweenDays(List<String> cards, LocalDateTime dateFrom, LocalDateTime dateTo);
 }

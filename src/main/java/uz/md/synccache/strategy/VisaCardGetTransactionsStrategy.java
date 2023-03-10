@@ -9,9 +9,7 @@ import uz.md.synccache.utils.AppUtils;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.List;
+import java.util.*;
 import java.util.function.Predicate;
 
 @Component
@@ -26,26 +24,31 @@ public class VisaCardGetTransactionsStrategy implements GetTransactionsStrategy 
     }
 
     @Override
-    public List<Transaction> getTransactionsBetweenDays(String card, LocalDateTime dateFrom, LocalDateTime dateTo) {
+    public Map<String, List<Transaction>> getTransactionsBetweenDays(List<String> cards, LocalDateTime dateFrom, LocalDateTime dateTo) {
 
-        if (card == null || dateFrom == null || dateTo == null)
+        if (cards == null || dateFrom == null || dateTo == null)
             throw new BadRequestException("Invalid request");
 
         LocalDate fromDate = dateFrom.toLocalDate();
         LocalDate toDate = dateTo.toLocalDate();
 
-        List<Transaction> response = visaCardClient
-                .getTransactionsBetweenDates(card, fromDate, toDate);
-
-        if (response == null)
-            return new ArrayList<>();
+        Map<String, List<Transaction>> response = new HashMap<>();
 
         Predicate<Transaction> dateTimePredicate = AppUtils
                 .dateTimePredicate(dateFrom, dateTo);
 
-        return response.stream()
-                .filter(dateTimePredicate)
-                .sorted(Comparator.comparing(Transaction::getAddedDate))
-                .toList();
+        for (String card : cards) {
+            List<Transaction> transactions = visaCardClient
+                    .getTransactionsBetweenDates(card, fromDate, toDate);
+            if (transactions != null)
+                response.put(card, transactions
+                        .stream()
+                        .filter(dateTimePredicate)
+                        .sorted(Comparator.comparing(Transaction::getAddedDate))
+                        .toList());
+        }
+
+        return response;
+
     }
 }

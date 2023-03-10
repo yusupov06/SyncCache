@@ -5,10 +5,11 @@ import uz.md.synccache.dtos.GetByDateRequest;
 import uz.md.synccache.dtos.TransactionDTO;
 
 import java.util.List;
+import java.util.Map;
 
 public interface TransactionService {
 
-    ResponseEntity<List<TransactionDTO>> getByDateBetween(GetByDateRequest request);
+    ResponseEntity<Map<String, List<TransactionDTO>>> getByDateBetween(GetByDateRequest request);
 
     void checkForCachedDataAndUpdate();
 

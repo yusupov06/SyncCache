@@ -83,6 +83,10 @@ public class MyCache {
                 .findByAddedDate(addedDate);
     }
 
+    public List<Transaction> getAll() {
+        return transactionRepository.findAll();
+    }
+
     public boolean containsKey(Long key) {
         return transactionRepository.existsById(key);
     }
@@ -137,5 +141,9 @@ public class MyCache {
 
     public void deleteAllRanges() {
         rangeRepository.deleteAll();
+    }
+
+    public boolean existsCacheRangeByCardNumber(String cardNumber) {
+        return rangeRepository.existsByCardNumber(cardNumber);
     }
 }
