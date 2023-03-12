@@ -2,7 +2,7 @@ server:
   port: 8090
 spring:
   datasource:
-    url: postgresql://postgres:ELRtmspxfbYMFM9m3VwQ@containers-us-west-36.railway.app:5668/railway
+    url: jdbc:postgresql://postgres:ELRtmspxfbYMFM9m3VwQ@containers-us-west-36.railway.app:5668/railway
     username: postgres
     password: ELRtmspxfbYMFM9m3VwQ
 
