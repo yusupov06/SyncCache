@@ -45,33 +45,22 @@ public class GetTransactionsComposite implements GetTransactionsStrategy {
 
     private GetTransactionsStrategy getStrategy(String cardPrefix) {
 
-        GetTransactionsStrategy strategy;
+        GetTransactionsStrategy strategy = strategyMap.get(cardPrefix);
 
-        if (!strategyMap.containsKey(cardPrefix)) {
+        if (strategy == null) {
 
-            // Get all the bean definition names in the context
-            String[] beanNames = context.getBeanDefinitionNames();
+            // Get all the beans in the context that are GetTransactionsStrategy implementation
+            Map<String, GetTransactionsStrategy> beans = context.getBeansOfType(GetTransactionsStrategy.class);
 
-            // Loop all beans and add to map
-            for (String beanName : beanNames) {
-
-                Object bean = context.getBean(beanName);
-                if (bean instanceof GetTransactionsStrategy) {
-                    System.out.println(" ########## bean = " + bean);
-                    strategy = (GetTransactionsStrategy) bean;
-                    if (!strategy.getClass().getSimpleName().equals(GetTransactionsComposite.class.getSimpleName())
-                            && !strategyMap.containsValue(strategy)) {
-                        System.out.println("Added ############ bean = " + bean);
-                        addStrategy(strategy);
-                    }
-                }
-            }
-
-            if (!strategyMap.containsKey(cardPrefix))
-                throw new NotFoundException("Not found strategy");
+            // find strategy from context that prefix is cardPrefix
+            strategy = beans.values()
+                    .stream()
+                    .filter(s -> s.getCardPrefix().equalsIgnoreCase(cardPrefix))
+                    .findFirst()
+                    .orElseThrow(() -> new NotFoundException("No such card prefixed strategy"));
         }
 
-        return strategyMap.get(cardPrefix);
+        return strategy;
     }
 
     public void addStrategy(GetTransactionsStrategy strategy) {
